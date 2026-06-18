@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EPS Engine Tracker — Scan Station</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@100;400;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --white:#FFFFFF;--sand:#E5E0D9;--sand-light:#F2EFEB;--sand-mid:#D8D2C9;
+    --black:#000000;--gray:#807A70;--blue:rgb(117,225,243);
+    --green:#2e7d32;--green-bg:#D4EDDA;--amber:#e65100;--amber-bg:#FFF3CD;
+    --red:#c62828;--red-bg:#F8D7DA;
+  }
+  body{font-family:'Archivo',sans-serif;font-weight:100;background:var(--white);color:var(--black);min-height:100vh;display:flex;flex-direction:column}
+
+  header{background:var(--black);color:var(--white);padding:12px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .logo{font-weight:700;font-size:12px;letter-spacing:0.15em;text-transform:uppercase}
+  .logo span{color:rgb(117,225,243)}
+  #clock{font-size:11px;letter-spacing:0.08em;color:var(--sand-mid)}
+
+  main{flex:1;display:grid;grid-template-columns:420px 1fr;gap:24px;padding:24px 28px;max-width:1300px;width:100%;margin:0 auto;align-items:start}
+
+  /* ── Left: scan panel ── */
+  .scan-panel{display:flex;flex-direction:column;gap:14px}
+
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .stat{background:var(--sand-light);border:1px solid var(--sand-mid);border-radius:2px;padding:12px 14px}
+  .stat-label{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gray);margin-bottom:4px}
+  .stat-value{font-size:24px;font-weight:100;line-height:1}
+
+  .scan-box{border:1.5px solid var(--sand-mid);border-radius:2px;padding:16px 18px;background:var(--white);transition:all 0.15s}
+  .scan-box.waiting{border-color:var(--sand-mid);opacity:0.5;pointer-events:none}
+  .scan-box.active{border-color:var(--black);background:#fafafa}
+  .scan-box.filled{border-color:var(--black);background:var(--sand-light)}
+  .scan-box.error{border-color:var(--red);background:#fff5f5}
+
+  .box-label{font-weight:700;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .step{width:20px;height:20px;background:var(--black);color:var(--white);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+  .step.done{background:var(--green)}
+
+  .scan-input{width:100%;border:none;border-bottom:2px solid var(--sand-mid);background:transparent;font-family:'Archivo',sans-serif;font-size:20px;font-weight:100;color:var(--black);padding:6px 0;outline:none;transition:border-color 0.15s}
+  .scan-input:focus{border-color:var(--black)}
+  .scan-input::placeholder{color:var(--sand-mid);font-size:14px}
+  .scan-input:disabled{color:var(--gray)}
+  .scan-hint{font-size:10px;color:var(--gray);margin-top:5px;letter-spacing:0.03em}
+
+  .stand-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+  .stand-btn{background:var(--sand-light);border:1.5px solid var(--sand-mid);border-radius:2px;padding:8px 6px;font-family:'Archivo',sans-serif;font-weight:700;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;color:var(--black)}
+  .stand-btn:hover{background:var(--sand);border-color:var(--black)}
+  .stand-btn.selected{background:var(--black);color:var(--white);border-color:var(--black)}
+
+  .engine-preview{background:var(--sand-light);border:1px solid var(--sand-mid);border-radius:2px;padding:12px 14px;display:none;font-size:11px}
+  .engine-preview.visible{display:block}
+  .preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
+  .pf-label{font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--gray)}
+  .pf-value{font-size:12px;font-weight:400;margin-top:1px}
+
+  #status-msg{padding:12px 14px;border-radius:2px;font-size:12px;border-left:3px solid transparent;display:none}
+  #status-msg.success{background:var(--green-bg);border-color:var(--green);color:var(--green);display:block}
+  #status-msg.error{background:var(--red-bg);border-color:var(--red);color:var(--red);display:block}
+  #status-msg.info{background:#e8f8ff;border-color:rgb(117,225,243);color:#006080;display:block}
+  #status-msg.loading{background:var(--sand-light);border-color:var(--sand-mid);color:var(--gray);display:block}
+
+  .btn-row{display:grid;grid-template-columns:1fr auto;gap:10px}
+  .btn{padding:12px 18px;font-family:'Archivo',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;border:none;border-radius:2px;cursor:pointer;transition:all 0.15s}
+  .btn-primary{background:var(--black);color:var(--white)}
+  .btn-primary:hover:not(:disabled){background:#333}
+  .btn-primary:disabled{background:var(--sand-mid);cursor:not-allowed}
+  .btn-secondary{background:var(--sand-light);color:var(--black);border:1.5px solid var(--sand-mid)}
+  .btn-secondary:hover{background:var(--sand)}
+
+  /* ── Right: log panel ── */
+  .log-panel{display:flex;flex-direction:column;gap:14px}
+  .panel-label{font-weight:700;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--gray)}
+  .table-wrap{border:1px solid var(--sand-mid);border-radius:2px;overflow-y:auto;max-height:320px}
+  table{width:100%;border-collapse:collapse}
+  thead{position:sticky;top:0;background:var(--black);z-index:1}
+  th{padding:9px 10px;font-weight:700;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--white);text-align:left;white-space:nowrap}
+  td{padding:8px 10px;font-size:11px;border-bottom:1px solid var(--sand-light);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;padding:2px 7px;border-radius:2px;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase}
+  .badge-in{background:var(--green-bg);color:var(--green)}
+  .badge-out{background:var(--red-bg);color:var(--red)}
+  .badge-active{background:var(--green-bg);color:var(--green)}
+  .badge-dormant{background:var(--amber-bg);color:var(--amber)}
+
+  footer{background:var(--sand-light);border-top:1px solid var(--sand-mid);padding:8px 28px;font-size:10px;color:var(--gray);display:flex;justify-content:space-between;flex-shrink:0}
+
+  /* Setup banner */
+  #setup-banner{background:#fffbe6;border:1.5px solid #f0c040;border-radius:2px;padding:12px 16px;font-size:11px;color:#5a4000;margin-bottom:14px}
+  #setup-banner strong{display:block;font-weight:700;margin-bottom:4px;font-size:12px}
+  #setup-banner code{background:#f0e8c0;padding:2px 6px;border-radius:2px;font-family:monospace;font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ARCHER AVIATION <span>|</span> EPS ENGINE TRACKER — SCAN STATION</div>
+  <div id="clock"></div>
+</header>
+
+<main>
+  <div class="scan-panel">
+
+    <!-- Setup banner (hidden once configured) -->
+    <div id="setup-banner">
+      <strong>⚠ Setup Required</strong>
+      Paste your Google Apps Script Web App URL below, then click Save.
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="api-url-input" type="text" placeholder="https://script.google.com/macros/s/..." 
+               style="flex:1;padding:6px 10px;border:1.5px solid #c0a000;border-radius:2px;font-size:11px;font-family:monospace">
+        <button onclick="saveApiUrl()" class="btn btn-primary" style="padding:6px 14px;font-size:9px">SAVE</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat"><div class="stat-label">Engines</div><div class="stat-value" id="s-total">51</div></div>
+      <div class="stat"><div class="stat-label">Active</div><div class="stat-value" id="s-active" style="color:var(--green)">—</div></div>
+      <div class="stat"><div class="stat-label">Dormant</div><div class="stat-value" id="s-dormant" style="color:var(--amber)">—</div></div>
+      <div class="stat"><div class="stat-label">Untracked</div><div class="stat-value" id="s-untracked" style="color:var(--gray)">—</div></div>
+    </div>
+
+    <!-- Step 1: Engine -->
+    <div class="scan-box active" id="box-eng">
+      <div class="box-label"><div class="step" id="step1">1</div>Scan Engine Barcode</div>
+      <input class="scan-input" id="inp-eng" type="text" placeholder="Scan barcode or type SN..." autocomplete="off" spellcheck="false">
+      <div class="scan-hint">Scanner auto-advances • Press Enter to confirm</div>
+    </div>
+
+    <!-- Engine preview -->
+    <div class="engine-preview" id="eng-preview">
+      <div class="panel-label">Engine Found</div>
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+
+    <!-- Step 2: Stand -->
+    <div class="scan-box waiting" id="box-stand">
+      <div class="box-label"><div class="step" id="step2">2</div>Scan Stand Barcode</div>
+      <input class="scan-input" id="inp-stand" type="text" placeholder="Scan barcode or type stand..." autocomplete="off" spellcheck="false" disabled>
+      <div class="scan-hint">Or click a stand below</div>
+      <div class="stand-grid" id="stand-grid"></div>
+    </div>
+
+    <!-- Status -->
+    <div id="status-msg"></div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-checkin" disabled onclick="doCheckIn()">CHECK IN → GOOGLE SHEETS</button>
+      <button class="btn btn-secondary" onclick="resetForm()">RESET</button>
+    </div>
+
+  </div>
+
+  <!-- Right: logs -->
+  <div class="log-panel">
+    <div class="panel-label">Recent Scans</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Engine</th><th>Stand</th><th>Event</th></tr></thead>
+        <tbody id="log-body"><tr><td colspan="4" style="color:var(--gray);text-align:center;padding:24px">No scans yet</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel-label">Current Locations</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Engine SN</th><th>Type</th><th>Stand</th><th>Since</th><th>Status</th></tr></thead>
+        <tbody id="loc-body"><tr><td colspan="5" style="color:var(--gray);text-align:center;padding:24px">No check-ins yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span>EPS Scan Station v2.0 — Live sync to Google Sheets</span>
+  <span id="api-status">API: not configured</span>
+</footer>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const STANDS = ["Jester","Maverick","Merlin","Viper","EAT","PIT LAB","Offsite","Other"];
+const DORMANT_DAYS = 14;
+const ENGINES = ["B2-204","B2-212","B2-407","B2-409","B2-508","B2-508r1","B2-508r2","B2-508r3","BEE12","BEE16","BEE17","BEE20","BEE34","BEE56","BEE58","BEE60","BEE102","BEE104","DEV-B3-203","DEV-B3-206","DEV-B3-403","DEV-B3-404","DEV-B3-405","SOF-B3-204","SOF-B3-205","SOF-B3-210","SOF-B3-211","SOF-B3-212","SOF-B3-214","SOF-B3-215","SOF-B3-219","SOF-B3-220","SOF-B3-264","SOF-B3-265","SOF-B3-266","SOF-B3-267","SOF-B3-268","SOF-B3-270","SOF-B3-351","SOF-B3-409","SOF-B3-410","SOF-B3-415","SOF-B3-419","SOF-B3-420","SOF-B3-421","SOF-B3-446","SOF-B3-447","SOF-B3-448","SOF-B3-450","SOF-B3-411","SOF-B3-537"];
+
+let API_URL     = localStorage.getItem('eps_api_url') || '';
+let scanLog     = JSON.parse(localStorage.getItem('eps_log2') || '[]');
+let currentLocs = JSON.parse(localStorage.getItem('eps_locs2') || '{}');
+let selEng = null, selStand = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildStands();
+  renderLog();
+  renderLocs();
+  updateStats();
+  tickClock();
+  setInterval(tickClock, 1000);
+  checkApiConfig();
+  document.getElementById('inp-eng').focus();
+
+  // Engine input
+  let engTimer;
+  document.getElementById('inp-eng').addEventListener('input', () => {
+    clearTimeout(engTimer);
+    engTimer = setTimeout(() => {
+      const v = document.getElementById('inp-eng').value.trim();
+      if (v.length >= 3) confirmEng(v);
+    }, 350);
+  });
+  document.getElementById('inp-eng').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmEng(document.getElementById('inp-eng').value.trim());
+  });
+
+  // Stand input
+  let standTimer;
+  document.getElementById('inp-stand').addEventListener('input', () => {
+    clearTimeout(standTimer);
+    const v = document.getElementById('inp-stand').value.trim();
+    const match = STANDS.find(s => s.toLowerCase() === v.toLowerCase());
+    if (match) { standTimer = setTimeout(() => confirmStand(match), 200); }
+  });
+  document.getElementById('inp-stand').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const v = document.getElementById('inp-stand').value.trim();
+      if (v) confirmStand(STANDS.find(s => s.toLowerCase() === v.toLowerCase()) || v);
+    }
+  });
+});
+
+function checkApiConfig() {
+  if (API_URL) {
+    document.getElementById('setup-banner').style.display = 'none';
+    document.getElementById('api-url-input').value = API_URL;
+    document.getElementById('api-status').textContent = 'API: connected ✓';
+    document.getElementById('api-status').style.color = '#2e7d32';
+  }
+}
+
+function saveApiUrl() {
+  const val = document.getElementById('api-url-input').value.trim();
+  if (!val.startsWith('https://script.google.com')) {
+    alert('That does not look like a valid Apps Script URL. Copy it from Deploy → Manage Deployments in Apps Script.');
+    return;
+  }
+  API_URL = val;
+  localStorage.setItem('eps_api_url', val);
+  document.getElementById('setup-banner').style.display = 'none';
+  document.getElementById('api-status').textContent = 'API: connected ✓';
+  document.getElementById('api-status').style.color = '#2e7d32';
+}
+
+function tickClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function buildStands() {
+  document.getElementById('stand-grid').innerHTML = STANDS.map(s =>
+    `<button class="stand-btn" onclick="selectStand('${s}')">${s}</button>`
+  ).join('');
+}
+
+// ── Engine confirm ────────────────────────────────────────────────────────────
+function confirmEng(sn) {
+  const match = ENGINES.find(e => e.toUpperCase() === sn.toUpperCase());
+  if (!match) {
+    setBox('box-eng','error');
+    showMsg(`"${sn}" not found in engine list.`, 'error');
+    return;
+  }
+  selEng = match;
+  const inp = document.getElementById('inp-eng');
+  inp.value = match;
+  inp.disabled = true;
+  setBox('box-eng','filled');
+  markStep('step1');
+
+  // Show preview with current location
+  const cur = currentLocs[match];
+  document.getElementById('preview-grid').innerHTML = `
+    <div><div class="pf-label">Serial Number</div><div class="pf-value" style="font-weight:700">${match}</div></div>
+    <div><div class="pf-label">Currently At</div><div class="pf-value">${cur ? cur.stand : '—'}</div></div>
+    <div><div class="pf-label">Time at Stand</div><div class="pf-value">${cur ? timeSince(cur.ts) : '—'}</div></div>
+  `;
+  document.getElementById('eng-preview').classList.add('visible');
+
+  // Enable stand step
+  const box = document.getElementById('box-stand');
+  box.className = 'scan-box active';
+  const si = document.getElementById('inp-stand');
+  si.disabled = false;
+  si.focus();
+  showMsg(`${match} found — now scan the stand barcode.`, 'info');
+}
+
+// ── Stand confirm ─────────────────────────────────────────────────────────────
+function selectStand(name) { if (selEng) confirmStand(name); }
+
+function confirmStand(name) {
+  selStand = name;
+  document.getElementById('inp-stand').value = name;
+  document.getElementById('inp-stand').disabled = true;
+  document.querySelectorAll('.stand-btn').forEach(b => b.classList.toggle('selected', b.textContent === name));
+  setBox('box-stand','filled');
+  markStep('step2');
+  document.getElementById('btn-checkin').disabled = false;
+  showMsg(`Ready: ${selEng} → ${name}. Sending to Google Sheets...`, 'loading');
+  doCheckIn();
+}
+
+// ── Check In ──────────────────────────────────────────────────────────────────
+async function doCheckIn() {
+  if (!selEng || !selStand) return;
+
+  showMsg('Sending to Google Sheets...', 'loading');
+  document.getElementById('btn-checkin').disabled = true;
+
+  const payload = { engineSN: selEng, stand: selStand, scannedBy: 'Scan Station' };
+
+  // Try to push to Google Sheets
+  if (API_URL) {
+    try {
+      // Use GET with URL params — works cross-origin with Apps Script
+      const url = API_URL
+        + '?engineSN=' + encodeURIComponent(payload.engineSN)
+        + '&stand='    + encodeURIComponent(payload.stand)
+        + '&scannedBy='+ encodeURIComponent(payload.scannedBy);
+      const resp = await fetch(url, { method: 'GET' });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Unknown error');
+      showMsg(`✓ ${selEng} checked into ${selStand} — Google Sheets updated!`, 'success');
+    } catch(err) {
+      showMsg(`⚠ Sheets sync failed: ${err.message} — logged locally only.`, 'error');
+    }
+  } else {
+    showMsg(`✓ ${selEng} checked into ${selStand} — (configure API to sync to Sheets)`, 'success');
+  }
+
+  // Always log locally as backup
+  const now = new Date();
+  if (currentLocs[selEng] && currentLocs[selEng].stand !== selStand) {
+    scanLog.unshift({ts:now.toISOString(), sn:selEng, stand:currentLocs[selEng].stand, event:'CHECK OUT'});
+  }
+  currentLocs[selEng] = { stand: selStand, ts: now.toISOString() };
+  scanLog.unshift({ts:now.toISOString(), sn:selEng, stand:selStand, event:'CHECK IN'});
+  if (scanLog.length > 200) scanLog.length = 200;
+
+  localStorage.setItem('eps_log2', JSON.stringify(scanLog));
+  localStorage.setItem('eps_locs2', JSON.stringify(currentLocs));
+
+  renderLog();
+  renderLocs();
+  updateStats();
+  setTimeout(resetForm, 3000);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderLog() {
+  const tb = document.getElementById('log-body');
+  if (!scanLog.length) { tb.innerHTML = '<tr><td colspan="4" style="color:var(--gray);text-align:center;padding:24px">No scans yet</td></tr>'; return; }
+  tb.innerHTML = scanLog.slice(0,30).map(e => `
+    <tr>
+      <td>${fmtTime(e.ts)}</td>
+      <td style="font-weight:700">${e.sn}</td>
+      <td>${e.stand}</td>
+      <td><span class="badge ${e.event==='CHECK IN'?'badge-in':'badge-out'}">${e.event}</span></td>
+    </tr>`).join('');
+}
+
+function renderLocs() {
+  const tb = document.getElementById('loc-body');
+  const entries = Object.entries(currentLocs);
+  if (!entries.length) { tb.innerHTML = '<tr><td colspan="5" style="color:var(--gray);text-align:center;padding:24px">No check-ins yet</td></tr>'; return; }
+  const now = Date.now();
+  tb.innerHTML = entries.sort((a,b) => new Date(b[1].ts)-new Date(a[1].ts)).map(([sn,loc]) => {
+    const days = (now - new Date(loc.ts)) / 86400000;
+    const dormant = days >= DORMANT_DAYS;
+    return `<tr>
+      <td style="font-weight:700">${sn}</td>
+      <td style="color:var(--gray);font-size:10px">—</td>
+      <td>${loc.stand}</td>
+      <td>${timeSince(loc.ts)}</td>
+      <td><span class="badge ${dormant?'badge-dormant':'badge-active'}">${dormant?'DORMANT':'ACTIVE'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateStats() {
+  const now = Date.now();
+  const tracked = Object.keys(currentLocs).length;
+  const dormant = Object.values(currentLocs).filter(l=>(now-new Date(l.ts))/86400000>=DORMANT_DAYS).length;
+  document.getElementById('s-total').textContent = ENGINES.length;
+  document.getElementById('s-active').textContent = tracked - dormant;
+  document.getElementById('s-dormant').textContent = dormant;
+  document.getElementById('s-untracked').textContent = ENGINES.length - tracked;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setBox(id, state) { document.getElementById(id).className = 'scan-box ' + state; }
+function markStep(id) { const el=document.getElementById(id); el.textContent='✓'; el.classList.add('done'); }
+function showMsg(msg, type) { const el=document.getElementById('status-msg'); el.className=type; el.textContent=msg; }
+function timeSince(iso) {
+  const d=(Date.now()-new Date(iso))/1000;
+  if(d<60) return `${Math.floor(d)}s`;
+  if(d<3600) return `${Math.floor(d/60)}m`;
+  if(d<86400) return `${Math.floor(d/3600)}h ${Math.floor((d%3600)/60)}m`;
+  return `${Math.floor(d/86400)}d ${Math.floor((d%86400)/3600)}h`;
+}
+function fmtTime(iso) { return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function resetForm() {
+  selEng=null; selStand=null;
+  ['inp-eng','inp-stand'].forEach(id=>{const e=document.getElementById(id);e.value='';e.disabled=id==='inp-stand';});
+  ['step1','step2'].forEach((id,i)=>{const e=document.getElementById(id);e.textContent=i+1;e.classList.remove('done');});
+  setBox('box-eng','active');
+  const bs=document.getElementById('box-stand'); bs.className='scan-box waiting';
+  document.getElementById('eng-preview').classList.remove('visible');
+  document.getElementById('btn-checkin').disabled=true;
+  document.querySelectorAll('.stand-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('status-msg').className='';
+  document.getElementById('inp-eng').focus();
+}
+</script>
+</body>
+</html>
